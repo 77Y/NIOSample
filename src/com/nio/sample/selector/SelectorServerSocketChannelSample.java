@@ -10,63 +10,60 @@ import java.util.Iterator;
 
 public class SelectorServerSocketChannelSample {
 
-	public static void main(String[] args) throws Exception {
+public static void main(String[] args) throws Exception {
 
-		ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();
+	ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();
 
-		serverSocketChannel.socket().bind(new InetSocketAddress(9000));
-		serverSocketChannel.configureBlocking(false);
+	serverSocketChannel.socket().bind(new InetSocketAddress(9000));
+	serverSocketChannel.configureBlocking(false);
 
-		Selector selector = Selector.open();
+	Selector selector = Selector.open();
 
-		// configureBlocking 如果不设置非阻塞，register的时候会报异常
-		// java.nio.channels.IllegalBlockingModeException
-		serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
+	// configureBlocking 如果不设置非阻塞，register的时候会报异常
+	// java.nio.channels.IllegalBlockingModeException
+	serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
 
-		while (true) {
-			// System.err.println("hello");
-			int selected = selector.select();
-			// System.err.println("hello2 " + selected);
+	while (true) {
 
-			if (selected > 0) {
+		int selected = selector.select();
+		
+		if (selected > 0) {
 
-				Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
-				while (iterator.hasNext()) {
+			Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
+			while (iterator.hasNext()) {
 
-					SelectionKey selectionKey = iterator.next();
+				SelectionKey selectionKey = iterator.next();
+				iterator.remove();
 
-					if (selectionKey.isAcceptable()) {
-						// System.err.println("Acceptable");
+				if (selectionKey.isAcceptable()) {
+					System.err.println("Acceptable");
 
-						SocketChannel socketChannel = serverSocketChannel.accept();
-						socketChannel.configureBlocking(false);
-						socketChannel.register(selector, SelectionKey.OP_READ);
+					SocketChannel socketChannel = serverSocketChannel.accept();
+					socketChannel.configureBlocking(false);
+					socketChannel.register(selector, SelectionKey.OP_READ);
 
-					} else if (selectionKey.isConnectable()) {
-						System.err.println("Connectable");
-					} else if (selectionKey.isReadable()) {
-						// System.err.println("Readable");
-						SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
+				} else if (selectionKey.isReadable()) {
+					System.err.println("Readable");
+					SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
 
-						ByteBuffer buffer = ByteBuffer.allocate(128);
-						socketChannel.read(buffer);
-						buffer.flip();
-						while (buffer.hasRemaining()) {
-							System.out.print((char) buffer.get());
-							System.out.println("--");
-						}
-						// System.out.println("*****");
+					ByteBuffer buffer = ByteBuffer.allocate(128);
+					socketChannel.read(buffer);
 
-					} else if (selectionKey.isWritable()) {
-						System.err.println("Writable");
-					}
+					System.out.println("接收来自客户端的数据：" + new String(buffer.array()));
+					selectionKey.interestOps(SelectionKey.OP_WRITE);
 
-					iterator.remove();
+				} else if (selectionKey.isWritable()) {
+					System.err.println("Writable");
+
+					SocketChannel channel = (SocketChannel) selectionKey.channel();
+					String content = "向客户端发送数据 : " + System.currentTimeMillis();
+					ByteBuffer buffer = ByteBuffer.wrap(content.getBytes());
+					channel.write(buffer);
+					selectionKey.interestOps(SelectionKey.OP_READ);
 				}
-
 			}
-
 		}
 	}
+}
 
 }

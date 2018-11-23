@@ -10,62 +10,59 @@ import java.util.Iterator;
 
 public class SelectorSample {
 
-	public static void main(String[] args) throws IOException {
+public static void main(String[] args) throws IOException {
 
-		con(1);
-		con(2);
-		con(3);
-	}
+	SocketChannel socketChannel = SocketChannel.open();
 
-	static void con(int i) throws IOException {
+	socketChannel.configureBlocking(false);
+	Selector selector = Selector.open();
+	socketChannel.register(selector, SelectionKey.OP_CONNECT);
 
-		SocketChannel socketChannel = SocketChannel.open();
+	socketChannel.connect(new InetSocketAddress("127.0.0.1", 9000));
 
-		socketChannel.configureBlocking(false);
-		Selector selector = Selector.open();
-		socketChannel.register(selector, SelectionKey.OP_CONNECT | SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+	while (true) {
+		int select = selector.select();
 
-		socketChannel.connect(new InetSocketAddress("127.0.0.1", 9000));
+		if (select > 0) {
 
-		while (true) {
-			int selected = selector.select();
+			Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
+			while (iterator.hasNext()) {
 
-			if (selected > 0) {
+				SelectionKey selectionKey = iterator.next();
 
-				Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
-				while (iterator.hasNext()) {
+				if (selectionKey.isConnectable()) {
+					System.err.println("Connectable");
 
-					SelectionKey selectionKey = iterator.next();
+					SocketChannel clientChannel = (SocketChannel) selectionKey.channel();
 
-					if (selectionKey.isConnectable()) {
-						System.err.println("Connectable");
-						socketChannel.finishConnect();
-						socketChannel.register(selector, SelectionKey.OP_WRITE);
-					} else if (selectionKey.isReadable()) {
-						System.err.println("Readable");
+					// TODO 非阻塞模式也会马上返回true？
+					clientChannel.finishConnect();
 
-					} else if (selectionKey.isWritable()) {
-						
-						System.err.println("Writable");
-						
-						ByteBuffer buffer = ByteBuffer.allocate(128);
-						buffer.clear();
-						buffer.put(("qiwoo:" + i).getBytes());
+					selectionKey.interestOps(SelectionKey.OP_WRITE);
 
-						buffer.flip();
-						while (buffer.hasRemaining()) {
-							socketChannel.write(buffer);
-						}
-						
-						socketChannel.close();
-					}
-					// 注意remove调，否则会一直存在
-					iterator.remove();
+				} else if (selectionKey.isReadable()) {
+					System.out.println("Readable");
+
+					SocketChannel channel = (SocketChannel) selectionKey.channel();
+					ByteBuffer buffer = ByteBuffer.allocate(128);
+					channel.read(buffer);
+					selectionKey.interestOps(SelectionKey.OP_WRITE);
+					System.out.println("收到服务端数据" + new String(buffer.array()));
+
+				} else if (selectionKey.isWritable()) {
+
+					SocketChannel clientChannel = (SocketChannel) selectionKey.channel();
+					String str = "qiwoo mobile";
+					ByteBuffer buffer = ByteBuffer.wrap(str.getBytes());
+					clientChannel.write(buffer);
+
+					selectionKey.interestOps(SelectionKey.OP_READ);
+					System.out.println("向服务端发送数据" + new String(buffer.array()));
 				}
+
+				iterator.remove();
 			}
 		}
-
-		// socketChannel.close();
 	}
-
+}
 }
